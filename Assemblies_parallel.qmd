@@ -71,9 +71,12 @@ To keep run things in a timely manner we will only assemble the metagenome NIOZ1
 Also, I will give you examples how the output can look like. Sometimes these numbers can slighly differ to the output you might see. This is ok, as the assembler might just produce a slighly different output. As long as the results are in a similar range all is good.
 :::
 
+
 :::{.callout-note}
+
 Whenever we ask a question the code solution will be hidden.
 You can show the code by pressing on \<Click me to see an answer\>.
+
 :::
 
 To fully understand this tutorial some good background in bash and awk is needed. If you want to review your background we provide some intro tutorials for:
@@ -276,6 +279,9 @@ ln -s /export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/rawdata_1/ .
 
 #create symbolic link to an adaptor file we need to clean up the genomes
 ln -s /export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/adaptors/ .
+
+#create symbolic link to a folder with custom scripts
+ln -s /export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/scripts/ .
 ```
 
 </details>
@@ -304,7 +310,7 @@ It is always good to explore your data before doing things with it. To do this:
 ```{bash}
 #Question1:
 zcat rawdata_1/NIOZ114_R1.fastq.gz | head
-````
+```
 
 The four lines in a fastq file contain:
 
@@ -681,7 +687,7 @@ mkdir 5_quast/
 mkdir 5_quast/all_comparisons
 
 #compare all genomes w/o references as input
-metaquast.py 4_assemblies/megahit/NIOZ*/final.contigs.fa.gz 4_assemblies/metaspades/NIOZ*/contigs.fasta -t 10 --no-snps --space-efficient  -o 5_quast/all_comparisons --max-ref-number 0
+metaquast.py 4_assemblies/megahit/NIOZ*/final.contigs.fa 4_assemblies/metaspades/NIOZ*/contigs.fasta -t 10 --no-snps --space-efficient  -o 5_quast/all_comparisons --max-ref-number 0
 
 #view report
 less -S 5_quast/all_comparisons/report.tsv 
@@ -696,7 +702,7 @@ Contigs:<br/>
   4  4_assemblies/metaspades/NIOZ114/contigs.fasta ==> NIOZ114_contigs<br/>
   5  4_assemblies/metaspades/NIOZ118/contigs.fasta ==> NIOZ118_contigs<br/>
   6  4_assemblies/metaspades/NIOZ130/contigs.fasta ==> NIOZ130_contigs<br/><br/><br/>
-  If we check the N50, both megahit and metaspades give good scores. However with N75 this looks better for metaspades. What tool we decide on might also depend on the available memory, where megahit usually is better.]{.spoiler}
+  If we check the N50 and N75, both megahit and metaspades give similar scores. What tool we decide on might also depend on the available memory, where megahit usually is better.]{.spoiler}
 
 <\details>
 
@@ -720,8 +726,10 @@ For this workflow:
 5. Generally, contigs less than 2500 bp are not too informative and are often misbinned (if you want to assemble these contigs into MAGs), so for now we remove them and will not work with them
 6. We count how many contigs we have left
 
-:::{.callout-note}
-You will get some error messages here, if you do not have the assemblies for all 3 metagenomes. However, this is nothing to worry about, for NIOZ114 the relevant files will still be generated
+::: {.callout-note}
+
+You will get some error messages here, if you do not have the assemblies for all 3 metagenomes. However, this is nothing to worry about, for NIOZ114 the relevant files will still be generated.
+
 :::
 
 ```{bash}
@@ -737,23 +745,28 @@ parallel -j3 'i={};  grep ">" 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies
 #clean the header and remove everything after the space
 parallel -j3 'i={}; cut -f1 -d " " 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies/megahit/${i}/${i}_contigs.fna' ::: `cat SampleList`
 
-#check what we did and how many contigs we have --> 4504
+#check how the header looks now and how many contigs we have --> 6000 to 14 000 contigs
 head 4_assemblies/megahit/NIOZ114/NIOZ114_contigs.fna
-grep -c ">"  4_assemblies/megahit/NIOZ114/NIOZ114_contigs.fna
+grep -c ">"  4_assemblies/megahit/NIOZ*/NIOZ*_contigs.fna
 
 #make list of length, GC for each contig
-parallel -j3 'i={}; perl scripts/perl//length+GC.pl 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies/megahit/${i}/${i}_length_gc.txt' ::: `cat SampleList`
+parallel -j3 'i={}; perl scripts/length+GC.pl 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies/megahit/${i}/${i}_length_gc.txt' ::: `cat SampleList`
 
-#make list for contigs above a certain length threshold
+#check output file and number of contigs for one assembly: 6377 contigs
+head 4_assemblies/megahit/NIOZ114/NIOZ114_length_gc.txt
+wc -l 4_assemblies/megahit/NIOZ114/NIOZ114_length_gc.txt
+
+#make list for contigs above a certain length threshold (>2500 bp)
 for i in `cat SampleList`; do awk '$6>=2500 {print $1,$5,$6}' 4_assemblies/megahit/${i}/${i}_length_gc.txt > 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt; done
 
 #check what we did
 head 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt
 
-#check how many contigs we have now --> should be around 359
+#check how many contigs we have now --> should be around 705
+#we can also see that almost 90% contigs were removed
 wc -l 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt
 
-#count nr of reads for >2500 and total length --> should be something like 359 contigs and 4,964,705 length
+#count nr of reads for >2500 and total length 
 for i in `cat SampleList`; do awk '{Length+=$3}END{print FILENAME,NR,Length}' 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt; done
 ```
 
@@ -766,7 +779,15 @@ NIOZ114_sc85_1 0.333 3851
 NIOZ114_sc96_1 0.334 7741
 ```
 
-7. now lets remove the short contigs from our actual sequences
+The summary statistics for the nr of contigs > 2500 bp and total sequence length should look something like this:
+
+```
+4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt 705 12904683  
+4_assemblies/megahit/NIOZ118/NIOZ118_Contigs_2500.txt 118 1374909  
+4_assemblies/megahit/NIOZ130/NIOZ130_Contigs_2500.txt 422 2038370  
+```
+
+Now lets remove the short contigs from our actual sequences
 
 ```{bash}
 #make a contig list with only contigs >2500bp
@@ -776,15 +797,15 @@ for i in `cat SampleList`; do perl scripts/screen_list_new.pl <(cut -f1 -d " " 4
 grep -c ">" 4_assemblies/megahit/N*/*_contigs_2500.fna
 ```
 
-The files we get have so many contigs (this number needs to be consistent with the numbers we have above. Again, if we just work with NIOZ 114, you might get sme error messages that you can ignore:
+The files we get have so many contigs (this number needs to be consistent with the numbers we have above. Again, if we just work with NIOZ 1114, you might get some error messages that you can ignore):
 
 ```
-4_assemblies/megahit/NIOZ114/NIOZ114_contigs_2500.fna:323
-4_assemblies/megahit/NIOZ118/NIOZ118_contigs_2500.fna:388
-4_assemblies/megahit/NIOZ130/NIOZ130_contigs_2500.fna:317
+4_assemblies/megahit/NIOZ114/NIOZ114_contigs_2500.fna:705  
+4_assemblies/megahit/NIOZ118/NIOZ118_contigs_2500.fna:118  
+4_assemblies/megahit/NIOZ130/NIOZ130_contigs_2500.fna:422  
 ```
 
-8. Now we can clean things up to not store large/unneccessary files
+Now we can clean things up to not store large/unneccessary files
 
 ```{bash}
 #rm temp files
@@ -799,8 +820,7 @@ rm 4_assemblies/megahit//*/intermediate_contigs/*fa
 ```
 
 
-## Combine all contig info
-
+## Combine all contig info into one file
 
 ```{bash}
 #prepare folder
@@ -815,6 +835,5 @@ cat  4_assemblies/megahit/N*/N*_Contigs_2500.txt >  4_assemblies/megahit/AllCont
 wc -l 4_assemblies/megahit/AllContigs/*txt
 ```
 
-We have a total of 1028 contigs from our 3 metagenomes with a length above 2,500 bp.
-
-If we just worked with NIOZ114 we got 359 contigs, with a length above 2,500 bp.
+We have a total of 1245 contigs from our 3 metagenomes with a length above 2,500 bp.
+If we just worked with NIOZ114 we got 705 contigs, with a length above 2,500 bp.
