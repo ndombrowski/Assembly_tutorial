@@ -1,0 +1,9 @@
+*gz
+.DS_Store
+.Rhistory
+.Rproj.user/
+._.DS_Store
+._Assemblies_parallel.rmd
+._docs
+For_zenodo/
+Assembly.Rproj
