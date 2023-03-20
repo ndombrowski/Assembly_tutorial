@@ -41,6 +41,13 @@ knitr::opts_chunk$set(eval=TRUE, cache=FALSE, message=FALSE, warning=FALSE,
 #devtools::session_info()
 ```
 
+# To do list
+
+This is a section for things that still need to be implemented by the author of this tutorial
+
+- Using screen for long running jobs
+- Alternatively, using batch scripts for long running jobs
+
 
 # Introduction
 
@@ -133,15 +140,15 @@ while read column1 column2; do cat $column1 $column2;  done < test.txt
 
 Notice, the workflow was written while using these program versions. If you are using the NIOZ server system there is nothing you need to do but if you run this tutorial on your own system/cluster you would need to install these tools first.
 
-1. prokka 1.14-dev
-2. Python 2.7.5
-3. perl v5.16.3
-4. megahit v1.1.3
-5. metaspades SPAdes-3.13.1
-6. BWA v0.7.17-r1188
-7. Quast v4.6.3
-
-
+- prokka 1.14-dev
+- Python 2.7.5
+- perl v5.16.3
+- MultiQC v1.8
+- FastQC v0.11.9
+- megahit v1.1.3
+- metaspades SPAdes-3.13.1
+- BWA v0.7.17-r1188
+- Quast v4.6.3
 
 
 
@@ -176,7 +183,7 @@ bwa index bins_1/combined/*
 #create mapping files
 for sample1 in `cat FileLists/Samples`; do bwa mem -t 40 bins_1/combined/NIOZ_bins.fna /export/lv4/projects/Black_Sea18/Data/RawData/Illumina/*/${sample1}*_L001_R1_001.fastq.gz /export/lv4/projects/Black_Sea18/Data/RawData/Illumina/*/${sample1}*_L001_R2_001.fastq.gz  >  mapping_1/${sample1}/${sample1}_v_${sample1}.sam; done 
 
-#retain properly baired reads, sort and create bam file
+#retain properly paired reads, sort and create bam file
 for sample1 in `cat FileLists/Samples`; do samtools view -f 2 -b -u mapping_1/${sample1}/${sample1}_v_${sample1}.sam | samtools sort -n -@ 4 - -o mapping_1/${sample1}/${sample1}_v_${sample1}_sorted.bam; done
 
 #extract paired reads
@@ -189,14 +196,12 @@ for sample1 in `cat FileLists/Samples`; do echo $(cat mapping_1/${sample1}/${sam
 #cleanup
 gzip mapping_1/*/*R*.fastq
 
-#echo $(cat /export/lv4/projects/Black_Sea18/Data/Operational/Illumina/trimmed_reads/NIOZ114.fw_paired.fastq.gz|wc -l)/4|bc
-
 #mv final files
-mkdir 1_rawdata
-mv mapping_1/*/*R[12].fastq.gz 1_rawdata
+mkdir rawdata_1
+mv mapping_1/*/*R[12].fastq.gz rawdata_1
 ```
 
-To give you a feeling about the data set, below you can see how many forward (R1) and reverse reads (R2) were recruited to each of the 3 metagenomes:
+To give you a feeling about the size of the data set, below you can see how many forward (R1) and reverse reads (R2) were recruited to each of the 3 metagenomes:
 
 R1: <br/>
 424,058<br/>
@@ -217,27 +222,72 @@ If you work with your own data, this easily can be several million reads. So run
 
 **Exercise: Setting up the working directory and required files**
 
-- Go into your personal folder in `/export/lv3/scratch/workshop_2021/Users/`
+If you work on this tutorial outside of the NIOZ tutorial download the data from [zenodo](https://zenodo.org/record/6518160#.ZBMD2NDMJD8). Have patience, they take a while to download. Exchange the path to where you downloaded the data.
+
+<details>
+    <summary>Click me if you use the tutorial outside of the workshop and want to use the zenodo files</summary>
+
+```{bash}
+#set a variable to the directory from which we want to work
+#change this according to your preferences
+wdir="/export/lv3/scratch/bioinformatics_workshop/SXX_Assembly"
+
+#go to our working directory
+cd $wdir
+
+#download the data
+curl "https://zenodo.org/record/7752831/files/rawdata_1.tar.gz?download=1" --output rawdata_1.tar.gz
+curl "https://zenodo.org/record/7752831/files/adaptors.tar.gz?download=1" --output adaptors.tar.gz
+
+#unzip the data
+tar xvzf rawdata_1.tar.gz
+tar xvzf adaptors.tar.gz
+
+#prepare custom scripts
+mkdir scripts
+wget https://raw.githubusercontent.com/ndombrowski/Assembly_tutorial/main/scripts/length%2BGC.pl -O scripts/length+GC.pl
+wget https://raw.githubusercontent.com/ndombrowski/Assembly_tutorial/main/scripts/screen_list_new.pl -O scripts/screen_list_new.pl
+
+#cleanup folder
+rm *gz
+```
+
+</details>
+
+- Go into your personal folder in `/export/lv3/scratch/workshop_2021/Users/<username>`
 - Make a new working directory, and name it `Assemblies`
 - go into that folder
-- set a symbolic link to a folder with the metagenomic data, which is found here: `/export/lv3/scratch/workshop_2021/S10_Assembly/1_rawdata/`
-- set a symbolic link to a folder with secondary data we need from here: `/export/lv3/scratch/workshop_2021/S10_Assembly/adaptors/`
+- set a symbolic link to a folder with the metagenomic data, which is found here: `/export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/rawdata_1/`
+- set a symbolic link to a folder with secondary data we need from here: `/export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/adaptors`
 
 <details>
     <summary>Click me to see an answer</summary>
 
 ```{bash}
-#prepare folder
+#go to your working directory
 cd /export/lv3/scratch/workshop_2021/Users/<UserName>
+
+#prepare a folder for the assembly workflow
 mkdir Assemblies
 cd Assemblies
 
-#set symbolic link to data
-ln -s /export/lv3/scratch/workshop_2021/S10_Assembly/1_rawdata/ .
-ln -s /export/lv3/scratch/workshop_2021/S10_Assembly/adaptors/ .
+#create symbolic links to the metagenome we work with
+ln -s /export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/rawdata_1/ .
+
+#create symbolic link to an adaptor file we need to clean up the genomes
+ln -s /export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/adaptors/ .
 ```
 
 </details>
+
+
+
+## Prepare a list with samples to loop through
+
+```{bash}
+echo -e "NIOZ114\nNIOZ118\nNIOZ130" > SampleList
+```
+
 
 
 **Questions**
@@ -253,28 +303,42 @@ It is always good to explore your data before doing things with it. To do this:
 
 ```{bash}
 #Question1:
-zcat 1_rawdata/NIOZ114_R1.fastq.gz | less
+zcat rawdata_1/NIOZ114_R1.fastq.gz | head
+````
 
+The four lines in a fastq file contain:
+
+- A sequence identifier with information about the sequencing run and the cluster. The exact contents of this line vary by based on the BCL to FASTQ conversion software used.
+- The sequence (the base calls; A, C, T, G and N).
+- A separator, which is simply a plus (+) sign.
+- The base call quality scores. These are Phred +33 encoded, using ASCII characters to represent the numerical quality scores.
+
+In case you are unsure about the format of fastq files, you can find some more info [here](https://support.illumina.com/bulletins/2016/04/fastq-files-explained.html).
+
+```{bash}
 #Question2 and 3:
-cd 1_rawdata
+cd rawdata_1
 for sample in *gz; do zcat $sample | echo $((`wc -l`/4)); done
 cd ..
 ```
 
-In case you are unsure about the format of fastq files, you can find some more info [here](https://support.illumina.com/bulletins/2016/04/fastq-files-explained.html).
+You should get the following numbers:
+
+774200 (NIOZ114_R1)  
+774200 (NIOZ114_R2)  
+
+354428 (NIOZ118_R1)  
+354428 (NIOZ118_R1)  
+
+288432 (NIOZ30_R1)  
+288432 (NIOZ130_R2)
+
+We can see that:
+
+- The R1 and R2 files have the same nr of sequences. **This is important**, if you ever see that you don't have the same number this indicates that there might have been a problem when downloading the data or that the sequence center  might have done some cleaning. You should follow up on this and figure out why the numbers are not the same.
+- You also see that sample NIOZ114 was sequenced much deeper than the other samples which might be important to keep in mind when interpreting the data.
 
 </details>
-
-
-
-## Prepare a list with samples to loop through
-
-
-```{bash}
-echo -e "NIOZ114\nNIOZ118\nNIOZ130" > SampleList
-```
-
-
 
 
 
@@ -300,7 +364,7 @@ mkdir 2_seq_quality
 mkdir 2_seq_quality/fastqc
 
 #run fastq
-for sample in `cat SampleList`; do fastqc -t 4 1_rawdata/${sample}* -o 2_seq_quality/fastqc; done
+for sample in `cat SampleList`; do fastqc -t 4 rawdata_1/${sample}* -o 2_seq_quality/fastqc; done
 
 #view report
 chrome 2_seq_quality/fastqc/NIOZ114_R1_fastqc.html
@@ -308,21 +372,21 @@ chrome 2_seq_quality/fastqc/NIOZ114_R1_fastqc.html
 
 If you want to exit chrome press: Control + X
 
+**Notice: on ada this is a bit slow and often faster to download the data to your own computer and view from there**
+
 The output should look something like this and among others we see:
 
 - The general sequence stats
 - the quality scores, across sequence length. The phred score goes from 0-40 (good to bad) and we can see that the sequences generally are a bit worse at the beginning. This has something to do with the sequencing approach and is nothing to worry about.
 - The average sequence quality. If you have a bump at the beginning, that means we have more low quality sequences that we should to get rid of.
 - The duplication level. I.e. here most of our sequences are singletons. If you have 16S sequences that will look a bit different and we will have more duplicated sequences.
-- Overrepresented species. Here, esp. if we have adaptor sequences left, you will see a sequence information. This is important to note down, as we want to remove adaptors in the cleaning step and its important to check if we used the right adaptor information for the cleaning.
+- Overrepresented species. Here, esp. if we have adapter sequences left, you will see a sequence information. This is important to note down, as we want to remove adapters in the cleaning step and its important to check if we used the right adaptor information for the cleaning.
 
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly1.png){width=70% fig-align="center"}
-
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly2.png){width=70% fig-align="center"}
-
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly3.png){width=70% fig-align="center"}
-
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly4.png){width=70% fig-align="center"}
+
 
 ### MultiQC to summarize the fastqc results
 
@@ -349,7 +413,7 @@ conda deactivate
 
 MultiQC summarizes the data across all metagenomes and should look something like this:
 
-![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly5.png){width=70% fig-align="center"}
+![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly5.png){width=100% fig-align="center"}
 
 We also get the plots we saw before for fastqc now just with multiple lines, each representing one of our metagenomes.
 
@@ -357,11 +421,12 @@ Here we also get a zoom into the adapter content. If we hover over a line we see
 
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly6.png){width=70% fig-align="center"}
 
+
 ## Run trimmomatic
 
 [Trimmomatic](http://www.usadellab.org/cms/uploads/supplementary/Trimmomatic/TrimmomaticManual_V0.32.pdf) : a flexible trimmer for Illumina sequence data. We want to filter our sequences and only retain them if they have a high enough quality. Additionally, we will remove Ns and for this we will use trimmomatic.[Bolger et al., 2014](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4103590/)
 
-While this is running (this might take a second):
+While this is running (this might take a bit):
 
 - Check the trimmomatic manual and control what the individual options do
 
@@ -370,20 +435,20 @@ While this is running (this might take a second):
 mkdir 3_trimmomatic
 
 #run trimmomatic
-for sample in `cat SampleList`; do java -jar /opt/biolinux/Trinity/trinity-plugins/Trimmomatic-0.36/trimmomatic-0.36.jar PE -threads 4 -trimlog 3_trimmomatic/${sample}.trimlog.txt  1_rawdata/${sample}_R1.fastq.gz 1_rawdata/${sample}_R2.fastq.gz 3_trimmomatic/${sample}_R1_paired.fastq.gz 3_trimmomatic/${sample}_R1_unpaired.fastq.gz 3_trimmomatic/${sample}_R2_paired.fastq.gz 3_trimmomatic/${sample}_R2_unpaired.fastq.gz ILLUMINACLIP:adaptors/TruSeq3-PE-2_modif_no_small.fa:1:30:10  SLIDINGWINDOW:5:22 MINLEN:100; done
+for sample in `cat SampleList`; do java -jar /opt/biolinux/Trinity/trinity-plugins/Trimmomatic-0.36/trimmomatic-0.36.jar PE -threads 4 -trimlog 3_trimmomatic/${sample}.trimlog.txt  rawdata_1/${sample}_R1.fastq.gz rawdata_1/${sample}_R2.fastq.gz 3_trimmomatic/${sample}_R1_paired.fastq.gz 3_trimmomatic/${sample}_R1_unpaired.fastq.gz 3_trimmomatic/${sample}_R2_paired.fastq.gz 3_trimmomatic/${sample}_R2_unpaired.fastq.gz ILLUMINACLIP:adaptors/TruSeq3-PE-2_modif_no_small.fa:1:30:10  SLIDINGWINDOW:5:22 MINLEN:100; done
 ```
 
-If we check the contents of the newly generated folder we should see something like the image below. Overall, for each metagenome 5 files are generated:
+If we check the contents of the newly generated folder `3_trimmomatic` we should see something like the image below. Overall, for each metagenome 5 files are generated:
 
-![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly7.png){width=70% fig-align="center"}
+![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly7.png){width=100% fig-align="center"}
 
-- A log file, which gives the read name, surviving sequence length, the location of the first surviving base, ie. the amount trimmed from the start, the location of the last surviving base in the original read and the amount trimmed from the end"
+- A log file, which gives the read name, surviving sequence length, the location of the first surviving base, i.e. the amount trimmed from the start, the location of the last surviving base in the original read and the amount trimmed from the end"
 - The paired reads for the forward and reverse reads, i.e. both the F and the corresponding R reads are retained when the quality of each is good enough 
 - The unpaired reads for the forward and reverse reads. For these reads, only one of the F and R reads had good quality stats and is retained
 
 What is happening:
 
-- ILLUMINACLIP: Cuts the adapter and other illumina-specific sequences from the read
+- ILLUMINACLIP: Cuts the adapter and other Illumina-specific sequences from the read
 - SLIDINGWINDOW: Performs a sliding window trimming approach. It starts scanning at the 5‟ end and clips the read once the average quality within the window falls below a threshold.
 - MINLEN: Drops the read if it is below a specified length
 
@@ -396,7 +461,7 @@ Specifying a trimlog file creates a log of all read trimmings. It will contain t
 - the amount trimmed from the end
 
 
-Example output for one sample:
+Example output for one sample (printed to screen):
 
 - Input Read Pairs: 262,355 
 - Both Surviving: 227,265 (86.62%) 
@@ -412,7 +477,7 @@ Example output for one sample:
 
 Once you are done with the full tutorial:
 
-- run fastqc and multiqc and check what changed between the raw reads and trimmed reads
+- run fastqc and multiqc on the fastq files generated with trimmomatic. Specifically, compare how the raw reads and trimmed reads compare.
 
 <details>
     <summary>Click me to see an answer</summary>
@@ -431,7 +496,7 @@ mkdir 2_seq_quality/multiqc_trimmed
 source ~/.bashrc.conda3
 conda activate multiqc
 
-#run fastq
+#run multiqc
 multiqc -d 2_seq_quality/fastqc* -o 2_seq_quality/multiqc_trimmed
 
 #view report
@@ -464,9 +529,9 @@ There are a number of different tools to assemble metagenomes, here, we will int
 2. Metaspades
 
 :::{.callout-note}
-For this tutorial we will JUST work with megahit since it requires less memory than Metaspades. 
+For this tutorial we will JUST work with Megahit since it requires less memory than Metaspades. 
 
-However, you well get all necessary background information to be able to use metaspades as well and if you are interested some examples on how to compare the output from the different tools is given as well.
+However, you well get all necessary background information to be able to use Metaspades as well and if you are interested some examples on how to compare the output from the different tools is given as well.
 :::
 
 
@@ -482,10 +547,14 @@ Other features:
   - i.e. ATGG as two 3mers: ATG and TGG
 - In each kmer iteration potential errors in the graphs are cleaned
 
-**Notice**: 
+:::{.callout-note}
 
-- When you do this with your own data do not change the kmer sizes that megahit uses by default! We just reduce the numbers of kmers we use for this workflow in order to speed the process up (it should take only a few minutes). 
+- **When you do this with your own data do not change the kmer sizes that megahit uses by default!**
+  We just reduce the numbers of kmers we use for this workflow in order to speed the process up (it should take only a few minutes). 
+- We are only using two threads to run this job (via `-t 2`). For your own purposes increase the number to whatever is suitable for your cluster.
 - Since this takes a bit of time to run, we only will run the assembly for one metagenome. However,the code to run this on all three metagenomes is provided as well. If you want to assemble all three metagenomes on your own, you simply have to remove the hash from the command below.
+
+:::
 
 While this is running (it takes a bit), feel free to revisit your code or have a look at different information sites on:
 
@@ -501,22 +570,25 @@ mkdir 4_assemblies/megahit
 #run megahit on all metagenomes (one sample)
 megahit -1 3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/NIOZ114 --k-min 43 --k-max 127 --k-step 28
 
-#lets control what we got --> should be around 4504 contigs
+#lets control what we got --> should be +/- 6000 contigs
 head 4_assemblies/megahit/NIOZ114/final.contigs.fa 
 grep -c ">" 4_assemblies/megahit/NIOZ114/final.contigs.fa 
 
 #run megahit on all metagenomes (all samples)
-#for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 10 -o 4_assemblies/megahit/$i; done
+#for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 20 -o 4_assemblies/megahit/$i; done
+
+#control all counts
+#grep -c ">" 4_assemblies/megahit/N*/final.contigs.fa 
 ```
 
 The files generated from megahit should look like this:
 
-![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly8.png){width=70% fig-align="center"}
+![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly8.png){width=80% fig-align="center"}
 These files contain the following:
 
 - final.contigs.fa = contains our assembly
 - intermediate_contigs = a folder that contains the assemblies for the different kmer sizes
-- log = log info listing the info on what happened at each step. In here, the end is interesting as it tells us the basic contig stats: 4512 contigs, total 7371931 bp, min 202 bp, max 138579 bp, avg 1634 bp, N50 10836 bp
+- log = log info listing the info on what happened at each step. In here, the end is interesting as it tells us the basic contig stats and should look something like this: 4512 contigs, total 7371931 bp, min 202 bp, max 138579 bp, avg 1634 bp, N50 10836 bp
 
 
 
@@ -536,7 +608,7 @@ Features:
 - also runs different kmers, the default is to automatically select the best range of kmers to use
 - Has an option to also run a read error correction
 
-Here, we use a bit less kmers compared to megahit due to the longer run-time. You can test different parameters and test, how the assembly is affected.
+Here, we use fewer kmers compared to megahit due to the longer run-time. When running this yourself you should test different parameters and test, compare how the assembly is affected by looking at the number of contigs generated, average contig length and other parameters we will discuss a bit later.
 
 ```{bash}
 #make folder
@@ -546,7 +618,7 @@ mkdir 4_assemblies/metaspades
 #spades.py --meta -t 20 -k 21,33,55,77 -1  3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz -o metaspades/NIOZ114
 
 #run spades on all metagenomes
-for sample in `cat SampleList`; do spades.py --meta -t 10 -k 21,39,59,99,127 -1  3_trimmomatic/${sample}_R1_paired.fastq.gz -2 3_trimmomatic/${sample}_R2_paired.fastq.gz -o 4_assemblies/metaspades/${sample}; done
+for sample in `cat SampleList`; do spades.py --meta -t 30 -k 21,39,59,99,127 -1  3_trimmomatic/${sample}_R1_paired.fastq.gz -2 3_trimmomatic/${sample}_R2_paired.fastq.gz -o 4_assemblies/metaspades/${sample}; done
 ```
 
 **Homework**
@@ -564,15 +636,16 @@ Something that is good to know if you work with single genomes: Quast allows you
 ```{bash}
 #make folders
 mkdir 5_quast/
+mkdir 5_quast/MvM
 
-#compare all genomes w/o references as input
+#generate summary statistics for a single metagenome
 metaquast.py 4_assemblies/megahit/NIOZ114/final.contigs.fa -t 2 --no-snps --space-efficient  -o 5_quast --max-ref-number 0
 
 #view report
 nano 5_quast/report.tsv 
 ```
 
-If we look at the report file, we see that megahit shows slightly longer contigs. For now we use this as main criterium to decide that we continue with the megahit assembly.
+If we look at the report file, we see that Megahit shows slightly longer contigs. For now we use this as main criterium to decide that we continue with the Megahit assembly.
 
 Other quality values:
 
@@ -590,7 +663,7 @@ Often the N50 is viewed as a good store for a good assembly, since ideally a goo
  
 **Homework**
 
-- Run all 3 assemblies both with Metaspades and Megahit
+- Run all 3 assemblies both with Metaspades and Megahit. **Watch the resources on ada when running this!**
 - Compare the stats with quast
 
 <details>
@@ -632,8 +705,6 @@ Contigs:<br/>
 
 # Assembly curation + basic stats (length, GC)
 
-
-
 Notice: 
 
 Depending on how the sequence header looks after your assembly the first step might need to be adjusted a bit if you run this for your own data. 
@@ -642,11 +713,11 @@ The goal of this section is to generate a concise, informative but simple header
 
 For this workflow:
 
-1. We check how the sequence header from our contigs looks like. The initial contig from megahit should look something like this: `k141_5 flag=1 multi=2.0000 len=570`, which has some useful information but if we deal with multiple assemblies is not very informative and there is the chance that we easily mix up things. So we first want to add the sample ID into the sequence header as well.
-2. We store the information from megahit into a new text document. 
+1. We check how the sequence header from our contigs looks like. The initial contig from Megahit should look something like this: `k141_5 flag=1 multi=2.0000 len=570`, which has some useful information but if we deal with multiple assemblies is not very informative and there is the chance that we easily mix up things. So we first want to add the sample ID into the sequence header as well.
+2. We store the information from Megahit into a new text document. 
 3. We shorten the header and just keep the sample and the scaffold ID.
-4. We calculate the length and GC of each contig. This is a bit redundant, since the megahit header provides that info but other tools, such as metaspades, do not give that by default.
-5. Generally, contigs less than 2500 bp are not too informative and are often missbinned (if you want to assemble these contigs into MAGs), so for now we remove them and will not work with them
+4. We calculate the length and GC of each contig. This is a bit redundant, since the Megahit header provides that info but other tools, such as Metaspades, do not give that by default.
+5. Generally, contigs less than 2500 bp are not too informative and are often misbinned (if you want to assemble these contigs into MAGs), so for now we remove them and will not work with them
 6. We count how many contigs we have left
 
 :::{.callout-note}
@@ -654,7 +725,7 @@ You will get some error messages here, if you do not have the assemblies for all
 :::
 
 ```{bash}
-#add in sample id into the file header for the assembly file to avoid bugs and easily identify where the contig orriginally came from
+#add in sample id into the file header for the assembly file to avoid bugs and easily identify where the contig originally came from
 parallel -j3 'i={}; sed "s/>/>${i}_/g" 4_assemblies/megahit/$i/final.contigs.fa | sed "s/k141_/sc/g" | sed "s/ /_1 /1" > 4_assemblies/megahit/${i}/${i}_temp' ::: `cat SampleList`
 
 #check what we did
@@ -671,7 +742,7 @@ head 4_assemblies/megahit/NIOZ114/NIOZ114_contigs.fna
 grep -c ">"  4_assemblies/megahit/NIOZ114/NIOZ114_contigs.fna
 
 #make list of length, GC for each contig
-parallel -j3 'i={}; perl /export/data01/tools/scripts/perl//length+GC.pl 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies/megahit/${i}/${i}_length_gc.txt' ::: `cat SampleList`
+parallel -j3 'i={}; perl scripts/perl//length+GC.pl 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies/megahit/${i}/${i}_length_gc.txt' ::: `cat SampleList`
 
 #make list for contigs above a certain length threshold
 for i in `cat SampleList`; do awk '$6>=2500 {print $1,$5,$6}' 4_assemblies/megahit/${i}/${i}_length_gc.txt > 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt; done
@@ -699,7 +770,7 @@ NIOZ114_sc96_1 0.334 7741
 
 ```{bash}
 #make a contig list with only contigs >2500bp
-for i in `cat SampleList`; do perl /export/data01/tools/scripts/perl/screen_list_new.pl <(cut -f1 -d " " 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt) 4_assemblies/megahit/${i}/${i}_contigs.fna keep > 4_assemblies/megahit/${i}/${i}_contigs_2500.fna; done
+for i in `cat SampleList`; do perl scripts/screen_list_new.pl <(cut -f1 -d " " 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt) 4_assemblies/megahit/${i}/${i}_contigs.fna keep > 4_assemblies/megahit/${i}/${i}_contigs_2500.fna; done
 
 #control step
 grep -c ">" 4_assemblies/megahit/N*/*_contigs_2500.fna
@@ -746,4 +817,4 @@ wc -l 4_assemblies/megahit/AllContigs/*txt
 
 We have a total of 1028 contigs from our 3 metagenomes with a length above 2,500 bp.
 
-If we just worked with NIOZ114 we got 359 contig, with a length above 2,500 bp.
+If we just worked with NIOZ114 we got 359 contigs, with a length above 2,500 bp.
