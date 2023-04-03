@@ -41,6 +41,8 @@ knitr::opts_chunk$set(eval=TRUE, cache=FALSE, message=FALSE, warning=FALSE,
 #devtools::session_info()
 ```
 
+::: {.content-hidden when-format="html"}
+
 # To do list
 
 This is a section for things that still need to be implemented by the author of this tutorial
@@ -48,38 +50,34 @@ This is a section for things that still need to be implemented by the author of 
 - Using screen for long running jobs
 - Alternatively, using batch scripts for long running jobs
 
+:::
+
 
 # Introduction
 
-The goal of this tutorial is to introduce students how to assemble reads from metagenomic sequence data. During this tutorial, we will: 
+The goal of this tutorial is to teach students how to assemble reads from metagenomic sequence data. During this tutorial, we will: 
 
-- take the raw reads from 3 "mini-metagenomes" that were recovered from 3 depth profiles of the water column from the Black Sea in a 2018 cruise (at 500 m, 1000 m and 2000 m water depth). These genomes are named NIOZ114, NIOZ118 and NIOZ130, respectively.
+- take the raw reads from 3 "mini-metagenomes" that were recovered from 3 depth profiles of the water column from the Black Sea in a 2018 cruise (at 500 m, 1000 m and 2000 m water depth). These genomes are named NIOZ114, NIOZ118 and NIOZ130, respectively
 - check the quality of the metagenomes
-- do quality filtering, i.e. remove reads that have a low quality
+- remove reads that have a low quality
 - assemble the reads into contigs using megahit and metaspades
 - get the basics stats to characterize the assemblies
 
-The reason why we work with three and not only one metagenome is because another pipeline that can follow the assembly is the binning pipeline. Additionally, it allows us to show you how to use loops (or GNU parallel effectively).
-
-When binning contigs from an assembly into metagenome-assembled genomes (MAGs) most binning tools take into account coverage information. We get this information by comparing the how many reads a contig recruits from different metagenomes (i.e. that come from different depth profiles in our case)-
+The reason why we work with three and not only one metagenome is because another pipeline that can follow the assembly is the binning pipeline that benefits from incorporating data from multiple samples. When binning contigs from an assembly into metagenome-assembled genomes (MAGs) most binning tools take into account coverage information. We get this information by comparing how many reads a contig recruits from different metagenomes (i.e. that come from different depth profiles in our case).
 
 In this tutorial we will provide an example for how to run the code for a single metagenome or in a loop with all metagenomes of interest. The single example will be commented out (we added a ``#`` in front of it), if you want to try this remove the ``#`` and run the code.
 
 :::{.callout-warning}
-To keep run things in a timely manner we will only assemble the metagenome NIOZ114 but feel free to run the other assemblies after the sessions.
-
-Also, I will give you examples how the output can look like. Sometimes these numbers can slighly differ to the output you might see. This is ok, as the assembler might just produce a slighly different output. As long as the results are in a similar range all is good.
+During this tutorial you will see examples that show how the output can look like. Sometimes these numbers can slightly differ to the output you might see. This is ok, as the assembler might just produce a slightly different output. As long as the results are in a similar range all is good.
 :::
 
 
 :::{.callout-note}
-
 Whenever we ask a question the code solution will be hidden.
 You can show the code by pressing on \<Click me to see an answer\>.
-
 :::
 
-To fully understand this tutorial some good background in bash and awk is needed. If you want to review your background we provide some intro tutorials for:
+To fully understand this tutorial some good background in bash and AWK is needed. If you want to review your background we provide some intro tutorials for:
 
 - [bash](https://github.com/ndombrowski/Unix_tutorial)
 - [awk](https://github.com/ndombrowski/AWK_tutorial)
@@ -121,11 +119,13 @@ for var in sample1 sample2 sample3; do echo $var done
 
 ### while read loops
 
-This kind of loops allow us to read in files into our loop, i.e. we might have two samples and want to do all comparisons. 
-I.e. the comparisons we want tmake are are stored in a text file like this:
+This kind of loop allow us to read in files into our loop, i.e. we might have two samples and want to do all possible comparisons between such samples. 
+I.e. the comparisons we want make are are stored in a text file named `test.txt` like this:
 
 Sample1 Sample2<br/>
 Sample2 Sample1
+
+And we can use a while loop to use the information from both columns as follows:
 
 ```{bash}
 while read column1 column2; do cat $column1 $column2;  done < test.txt
@@ -217,13 +217,11 @@ R2: <br/>
 473,936<br/>
 
 
-If you work with your own data, this easily can be several million reads. So runtimes will be much longer and you can benefit from using more CPUs to run jobs.
+If you work with your own data, this easily can be several million reads. So run times will be much longer and you can benefit from using more CPU's to run jobs.
 
 
 
 # Tutorial start: Prepare your data
-
-**Exercise: Setting up the working directory and required files**
 
 If you work on this tutorial outside of the NIOZ tutorial download the data from [zenodo](https://zenodo.org/record/6518160#.ZBMD2NDMJD8). Have patience, they take a while to download. Exchange the path to where you downloaded the data.
 
@@ -233,7 +231,7 @@ If you work on this tutorial outside of the NIOZ tutorial download the data from
 ```{bash}
 #set a variable to the directory from which we want to work
 #change this according to your preferences
-wdir="/export/lv3/scratch/bioinformatics_workshop/SXX_Assembly"
+wdir="/export/lv3/scratch/bioinformatics_workshop/S10_Assembly"
 
 #go to our working directory
 cd $wdir
@@ -257,38 +255,43 @@ rm *gz
 
 </details>
 
+
+**Exercise: Setting up the working directory and required files**
+
 - Go into your personal folder in `/export/lv3/scratch/workshop_2021/Users/<username>`
 - Make a new working directory, and name it `Assemblies`
-- go into that folder
-- set a symbolic link to a folder with the metagenomic data, which is found here: `/export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/rawdata_1/`
-- set a symbolic link to a folder with secondary data we need from here: `/export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/adaptors`
+- go into that folder, this is your working directory
+- inside that folder, set a symbolic link to a folder with the metagenomic data, which is found here: `/export/lv3/scratch/bioinformatics_workshop/S10_Assembly/rawdata_1/`
+- set another symbolic link to a folder with secondary data we need from here: `/export/lv3/scratch/bioinformatics_workshop/S10_Assembly/adaptors`
 
 <details>
     <summary>Click me to see an answer</summary>
 
 ```{bash}
-#go to your working directory
-cd /export/lv3/scratch/workshop_2021/Users/<UserName>
+#set variable for the User directory
+user_name="ndombrowski"
 
-#prepare a folder for the assembly workflow
+#prepare working directory
+cd /export/lv3/scratch/bioinformatics_workshop/Users/${user_name}
 mkdir Assemblies
 cd Assemblies
 
 #create symbolic links to the metagenome we work with
-ln -s /export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/rawdata_1/ .
+ln -s /export/lv3/scratch/bioinformatics_workshop/S10_Assembly/rawdata_1/ .
 
-#create symbolic link to an adaptor file we need to clean up the genomes
-ln -s /export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/adaptors/ .
+#create symbolic link to an adapter file we need to clean up the genomes
+ln -s /export/lv3/scratch/bioinformatics_workshop/S10_Assembly/adaptors/ .
 
 #create symbolic link to a folder with custom scripts
-ln -s /export/lv3/scratch/bioinformatics_workshop/SXX_Assembly/scripts/ .
+ln -s /export/lv3/scratch/bioinformatics_workshop/S10_Assembly/scripts/ .
 ```
 
 </details>
 
 
-
 ## Prepare a list with samples to loop through
+
+As discussed in the introduction, we will use for-loops to run the same script over our 3 different metagenomes. Something useful to have is a file that lists the samples we are working with. So, let's start by creating such a list.
 
 ```{bash}
 echo -e "NIOZ114\nNIOZ118\nNIOZ130" > SampleList
@@ -300,9 +303,9 @@ echo -e "NIOZ114\nNIOZ118\nNIOZ130" > SampleList
 
 It is always good to explore your data before doing things with it. To do this:
 
-1. Check the data structure and open the file with less (ideally without unzipping the file). Do you know what is stored in each of the four lines?
+1. Check the data structure and open the file with less (ideally without unzipping the file, for example using `zcat`). Do you know what is stored in each of the four lines? If you are unsure, click the button below for a more detailed explanation/
 2. Answer how many sequences we have in each file.
-3. Find out whether the R1 and R2 (which store the forward and the reverse reads respectively) have the same number of sequences in the file.
+3. Find out whether the R1 and R2 files (in which store the forward and the reverse reads in, respectively) have the same number of sequences in the file.
 
 <details>
     <summary>Click me to see an answer</summary>
@@ -341,11 +344,10 @@ You should get the following numbers:
 
 We can see that:
 
-- The R1 and R2 files have the same nr of sequences. **This is important**, if you ever see that you don't have the same number this indicates that there might have been a problem when downloading the data or that the sequence center  might have done some cleaning. You should follow up on this and figure out why the numbers are not the same.
-- You also see that sample NIOZ114 was sequenced much deeper than the other samples which might be important to keep in mind when interpreting the data.
+- The R1 and R2 files have the same number of sequences. **This is important**, if you ever see that you don't have the same number this indicates that there might have been a problem when downloading the data or that the sequence center  might have done some cleaning. You should follow up on this and figure out why the numbers are not the same.
+- You also see that we have much more reads for sample NIOZ114 than for the other samples which might be important to keep in mind when interpreting the data.
 
 </details>
-
 
 
 
@@ -359,8 +361,8 @@ We can see that:
 
 - Overall read quality, 
 - [QC bias](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3378858/)
-- Number of Ns (unassigned bases)
-- Over-represented sequences (often adaptor sequences)
+- Number of Ns (i.e. unassigned bases)
+- Over-represented sequences (often adapter sequences)
 
 Some examples for good and bad reports can be found [here](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
 
@@ -382,11 +384,11 @@ If you want to exit chrome press: Control + X
 
 The output should look something like this and among others we see:
 
-- The general sequence stats
-- the quality scores, across sequence length. The phred score goes from 0-40 (good to bad) and we can see that the sequences generally are a bit worse at the beginning. This has something to do with the sequencing approach and is nothing to worry about.
+- the general sequence statistics
+- the quality scores, across the sequence length. The phred score goes from 0-40 (good to bad) and we can see that the sequences generally are a bit worse at the beginning. This has something to do with the sequencing approach and is nothing to worry about. However, if you would see that the complete sequence is bad that is something to discuss for example with the sequencing center. 
 - The average sequence quality. If you have a bump at the beginning, that means we have more low quality sequences that we should to get rid of.
 - The duplication level. I.e. here most of our sequences are singletons. If you have 16S sequences that will look a bit different and we will have more duplicated sequences.
-- Overrepresented species. Here, esp. if we have adapter sequences left, you will see a sequence information. This is important to note down, as we want to remove adapters in the cleaning step and its important to check if we used the right adaptor information for the cleaning.
+- Overrepresented sequences Here, esp. if we have adapter sequences left, you will see a sequence information. This is important to note down, as we want to remove adapters in the cleaning step and its important to check if we used the right adapter information for the cleaning.
 
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly1.png){width=70% fig-align="center"}
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly2.png){width=70% fig-align="center"}
@@ -430,6 +432,8 @@ Here we also get a zoom into the adapter content. If we hover over a line we see
 
 ## Run trimmomatic
 
+Next, we want to clean our sequences. For example, we want to remove adapters as well as low quality sequences. For this we can for example use Trimmomatic.  
+
 [Trimmomatic](http://www.usadellab.org/cms/uploads/supplementary/Trimmomatic/TrimmomaticManual_V0.32.pdf) : a flexible trimmer for Illumina sequence data. We want to filter our sequences and only retain them if they have a high enough quality. Additionally, we will remove Ns and for this we will use trimmomatic.[Bolger et al., 2014](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4103590/)
 
 While this is running (this might take a bit):
@@ -449,16 +453,16 @@ If we check the contents of the newly generated folder `3_trimmomatic` we should
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly7.png){width=100% fig-align="center"}
 
 - A log file, which gives the read name, surviving sequence length, the location of the first surviving base, i.e. the amount trimmed from the start, the location of the last surviving base in the original read and the amount trimmed from the end"
-- The paired reads for the forward and reverse reads, i.e. both the F and the corresponding R reads are retained when the quality of each is good enough 
+- The paired reads for the forward and reverse reads. In this scenario both the forward and the corresponding reverse read are retained when the quality of each is good enough 
 - The unpaired reads for the forward and reverse reads. For these reads, only one of the F and R reads had good quality stats and is retained
 
 What is happening:
 
 - ILLUMINACLIP: Cuts the adapter and other Illumina-specific sequences from the read
-- SLIDINGWINDOW: Performs a sliding window trimming approach. It starts scanning at the 5‟ end and clips the read once the average quality within the window falls below a threshold.
+- SLIDINGWINDOW: Performs a sliding window trimming approach to identify low quality sequences. The window starts scanning at the 5‟ end and clips the read once the average quality within the window falls below a threshold.
 - MINLEN: Drops the read if it is below a specified length
 
-Specifying a trimlog file creates a log of all read trimmings. It will contain the following details:
+Using the argument `-trimlog` creates a log of all read trimmings. It will contain the following details:
 
 - the read name
 - the surviving sequence length
@@ -483,7 +487,7 @@ Example output for one sample (printed to screen):
 
 Once you are done with the full tutorial:
 
-- run fastqc and multiqc on the fastq files generated with trimmomatic. Specifically, compare how the raw reads and trimmed reads compare.
+- Run fastqc and multiqc on the fastq files generated with trimmomatic. Specifically, compare how the raw reads and trimmed reads compare.
 
 <details>
     <summary>Click me to see an answer</summary>
@@ -543,13 +547,13 @@ However, you well get all necessary background information to be able to use Met
 
 ## Run Megahit
 
-[MEGAHIT](https://github.com/voutcn/megahit) is an ultra-fast and memory-efficient NGS assembler. It is optimized for metagenomes, but also works well on generic single genome assembly (small or mammalian size) and single-cell assembly. [Li et al., 2016](https://pubmed.ncbi.nlm.nih.gov/27012178/) The benefit over the other tool we use is that it works well while not using a lot of memory, which allows us to run it on smaller computers.
+[MEGAHIT](https://github.com/voutcn/megahit) is an ultra-fast and memory-efficient NGS assembler. It is optimized for metagenomes, but also works well on single genome and single-cell assemblies. [Li et al., 2016](https://pubmed.ncbi.nlm.nih.gov/27012178/) The benefit compared to Metaspades is that it works well while not using a lot of memory, which allows us to run it on less powerful computers.
 
 Other features:
 
 - Makes use of de Bruijn graphs. If you want to know more about the theory, you can check [this paper](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5531759/)
 - Sequences are split into kmers (k-mers are subsequences of length ``n`` contained within a biological sequence). 
-- Megahit builds assemblies from kmers with different lengths (21,29,39,59,79,99,119,141)
+- Megahit builds assemblies from kmers with different lengths (for example: 21,29,39,59,79,99,119,141)
   - i.e. ATGG as two 3mers: ATG and TGG
 - In each kmer iteration potential errors in the graphs are cleaned
 
@@ -574,20 +578,19 @@ mkdir 4_assemblies
 mkdir 4_assemblies/megahit
 
 #run megahit on all metagenomes (one sample)
-megahit -1 3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/NIOZ114 --k-min 43 --k-max 127 --k-step 28
-
-#lets control what we got --> should be +/- 6000 contigs
-head 4_assemblies/megahit/NIOZ114/final.contigs.fa 
-grep -c ">" 4_assemblies/megahit/NIOZ114/final.contigs.fa 
+#megahit -1 3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/NIOZ114 --k-min 43 --k-max 127 --k-step 28
 
 #run megahit on all metagenomes (all samples)
-#for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 20 -o 4_assemblies/megahit/$i; done
+for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/$i; done
 
-#control all counts
-#grep -c ">" 4_assemblies/megahit/N*/final.contigs.fa 
+#lets how the content of an assembly looks
+head 4_assemblies/megahit/NIOZ114/final.contigs.fa 
+
+#control how many contigs we get for each assembly
+grep -c ">" 4_assemblies/megahit/N*/final.contigs.fa 
 ```
 
-The files generated from megahit should look like this:
+The files generated from Megahit should look like this:
 
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly8.png){width=80% fig-align="center"}
 These files contain the following:
@@ -603,7 +606,7 @@ These files contain the following:
 
 
 :::{.callout-note}
-Spades is much more memory intensive compared to megahit, which is why for this tutorial we **WILL NOT** run it. However, feel free to test it after wards.
+Spades is much more memory intensive compared to megahit, which is why for this tutorial we **WILL NOT** run it. However, feel free to test it afterwards.
 :::
 
 [Metaspades](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5411777/) is another commonly used assembler that is a, for metagenomes, adjusted [spades assembler](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3342519/)
@@ -611,8 +614,8 @@ Spades is much more memory intensive compared to megahit, which is why for this 
 Features:
 
 - metaSPAdes first constructs the de Bruijn graph of all reads using SPAdes
-- also runs different kmers, the default is to automatically select the best range of kmers to use
-- Has an option to also run a read error correction
+- similar as Megahit, this tool also generates assemblies with different kmers, the default is to automatically select the best range of kmers to use
+- Has an option to also run a read error correction (this is however memory intensive)
 
 Here, we use fewer kmers compared to megahit due to the longer run-time. When running this yourself you should test different parameters and test, compare how the assembly is affected by looking at the number of contigs generated, average contig length and other parameters we will discuss a bit later.
 
@@ -629,7 +632,7 @@ for sample in `cat SampleList`; do spades.py --meta -t 30 -k 21,39,59,99,127 -1 
 
 **Homework**
 
-If you run this step on your own, view the content of the generated files and check how many contigs we have.
+Run metaspades, view the content of the generated files and check how many contigs we have.
 
 
 ## Run quast to evaluate the assembly
@@ -642,7 +645,6 @@ Something that is good to know if you work with single genomes: Quast allows you
 ```{bash}
 #make folders
 mkdir 5_quast/
-mkdir 5_quast/MvM
 
 #generate summary statistics for a single metagenome
 metaquast.py 4_assemblies/megahit/NIOZ114/final.contigs.fa -t 2 --no-snps --space-efficient  -o 5_quast --max-ref-number 0
@@ -651,9 +653,7 @@ metaquast.py 4_assemblies/megahit/NIOZ114/final.contigs.fa -t 2 --no-snps --spac
 nano 5_quast/report.tsv 
 ```
 
-If we look at the report file, we see that Megahit shows slightly longer contigs. For now we use this as main criterium to decide that we continue with the Megahit assembly.
-
-Other quality values:
+Information on the output:
 
 - [N50](https://www.molecularecologist.com/2017/03/29/whats-n50/): Imagine that you line up all the contigs in your assembly in the order of their sequence lengths (Fig. 1a). You have the longest contig first, then the second longest, and so on with the shortest ones in the end. Then you start adding up the lengths of all contigs from the beginning, so you take the longest contig + the second longest + the third longest and so on — all the way until you’ve reached the number that is making up 50% of your total assembly length. That length of the contig that you stopped counting at, this will be your N50 number.
 
@@ -670,7 +670,7 @@ Often the N50 is viewed as a good store for a good assembly, since ideally a goo
 **Homework**
 
 - Run all 3 assemblies both with Metaspades and Megahit. **Watch the resources on ada when running this!**
-- Compare the stats with quast
+- Compare the statistics with quast
 
 <details>
     <summary>Click me to see an answer</summary>
@@ -721,9 +721,9 @@ For this workflow:
 
 1. We check how the sequence header from our contigs looks like. The initial contig from Megahit should look something like this: `k141_5 flag=1 multi=2.0000 len=570`, which has some useful information but if we deal with multiple assemblies is not very informative and there is the chance that we easily mix up things. So we first want to add the sample ID into the sequence header as well.
 2. We store the information from Megahit into a new text document. 
-3. We shorten the header and just keep the sample and the scaffold ID.
-4. We calculate the length and GC of each contig. This is a bit redundant, since the Megahit header provides that info but other tools, such as Metaspades, do not give that by default.
-5. Generally, contigs less than 2500 bp are not too informative and are often misbinned (if you want to assemble these contigs into MAGs), so for now we remove them and will not work with them
+3. We shorten the header and just keep the sample and the contig ID. I.e. the header might now look like this: `NIOZ114_K141_5`
+4. We calculate the length and GC of each contig. This is a bit redundant, since the Megahit header provides that info but other tools, such as Metaspades, do not give these numbers by default.
+5. Generally, contigs less than 2500 bp are not very informative and are often misbinned (if you want to assemble these contigs into MAGs), so for now we remove them and will not work with them in later parts of the workflow
 6. We count how many contigs we have left
 
 ::: {.callout-note}
@@ -770,7 +770,7 @@ wc -l 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt
 for i in `cat SampleList`; do awk '{Length+=$3}END{print FILENAME,NR,Length}' 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt; done
 ```
 
-The file, i.e. 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt , should look something like this in the end and for each contig gives the gc and length information:
+The output file, i.e. `4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt`, should look something like this in the end and for each contig gives the GC and length information:
 
 ```
 NIOZ114_sc48_1 0.582 3180
@@ -779,7 +779,7 @@ NIOZ114_sc85_1 0.333 3851
 NIOZ114_sc96_1 0.334 7741
 ```
 
-The summary statistics for the nr of contigs > 2500 bp and total sequence length should look something like this:
+The summary statistics for the number of contigs > 2500 bp and total sequence length should look something like this:
 
 ```
 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt 705 12904683  
@@ -787,17 +787,17 @@ The summary statistics for the nr of contigs > 2500 bp and total sequence length
 4_assemblies/megahit/NIOZ130/NIOZ130_Contigs_2500.txt 422 2038370  
 ```
 
-Now lets remove the short contigs from our actual sequences
+Now lets remove the short contigs from our actual sequences:
 
 ```{bash}
-#make a contig list with only contigs >2500bp
+#for each assembly make a new file and only include contigs >2500bp
 for i in `cat SampleList`; do perl scripts/screen_list_new.pl <(cut -f1 -d " " 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt) 4_assemblies/megahit/${i}/${i}_contigs.fna keep > 4_assemblies/megahit/${i}/${i}_contigs_2500.fna; done
 
 #control step
 grep -c ">" 4_assemblies/megahit/N*/*_contigs_2500.fna
 ```
 
-The files we get have so many contigs (this number needs to be consistent with the numbers we have above. Again, if we just work with NIOZ 1114, you might get some error messages that you can ignore):
+The files we get have so many contigs (this number needs to be consistent with the numbers we have above during the step `#count nr of reads for >2500 and total length`). Again, if we just work with NIOZ1114, you might get some error messages that you can ignore):
 
 ```
 4_assemblies/megahit/NIOZ114/NIOZ114_contigs_2500.fna:705  
@@ -805,7 +805,7 @@ The files we get have so many contigs (this number needs to be consistent with t
 4_assemblies/megahit/NIOZ130/NIOZ130_contigs_2500.fna:422  
 ```
 
-Now we can clean things up to not store large/unneccessary files
+Now we can clean things up to not store large or unnecessary files
 
 ```{bash}
 #rm temp files
@@ -837,3 +837,9 @@ wc -l 4_assemblies/megahit/AllContigs/*txt
 
 We have a total of 1245 contigs from our 3 metagenomes with a length above 2,500 bp.
 If we just worked with NIOZ114 we got 705 contigs, with a length above 2,500 bp.
+
+
+
+
+
+
