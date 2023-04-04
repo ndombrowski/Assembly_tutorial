@@ -440,12 +440,19 @@ While this is running (this might take a bit):
 
 - Check the trimmomatic manual and control what the individual options do
 
+:::{.callout-note}
+Depending on the number of samples and the HPC you have, this job is also something that can easily be run faster using GNU parallel.
+:::
+
 ```{bash}
 #prepare folder
 mkdir 3_trimmomatic
 
 #run trimmomatic
 for sample in `cat SampleList`; do java -jar /opt/biolinux/Trinity/trinity-plugins/Trimmomatic-0.36/trimmomatic-0.36.jar PE -threads 4 -trimlog 3_trimmomatic/${sample}.trimlog.txt  rawdata_1/${sample}_R1.fastq.gz rawdata_1/${sample}_R2.fastq.gz 3_trimmomatic/${sample}_R1_paired.fastq.gz 3_trimmomatic/${sample}_R1_unpaired.fastq.gz 3_trimmomatic/${sample}_R2_paired.fastq.gz 3_trimmomatic/${sample}_R2_unpaired.fastq.gz ILLUMINACLIP:adaptors/TruSeq3-PE-2_modif_no_small.fa:1:30:10  SLIDINGWINDOW:5:22 MINLEN:100; done
+
+#check files generated for one of our metagenomes
+ll 3_trimmomatic/NIOZ114*
 ```
 
 If we check the contents of the newly generated folder `3_trimmomatic` we should see something like the image below. Overall, for each metagenome 5 files are generated:
@@ -487,7 +494,7 @@ Example output for one sample (printed to screen):
 
 Once you are done with the full tutorial:
 
-- Run fastqc and multiqc on the fastq files generated with trimmomatic. Specifically, compare how the raw reads and trimmed reads compare.
+- Run fastqc and multiqc on the paired fastq files generated with trimmomatic. Since we will use only the paired data for the assembly, we will only look at these files. Specifically, compare how the raw reads and trimmed reads compare.
 
 <details>
     <summary>Click me to see an answer</summary>
@@ -522,7 +529,7 @@ If we compare the results for i.e. NIOZ114_R1 we should see that:
 - We lost a few sequences
 - The few short sequences are gone
 - We lost the few sequences with bad quality scores
-- The adaptors are gone
+- The adapters are gone
 
 <\details>
 
@@ -558,12 +565,11 @@ Other features:
 - In each kmer iteration potential errors in the graphs are cleaned
 
 :::{.callout-note}
-
-- **When you do this with your own data do not change the kmer sizes that megahit uses by default!**
+- **This takes a bit to run, so we only run the assembly for one metagenome**
+- **When you do this with your own data do not change the kmer sizes that Megahit uses by default!**
   We just reduce the numbers of kmers we use for this workflow in order to speed the process up (it should take only a few minutes). 
-- We are only using two threads to run this job (via `-t 2`). For your own purposes increase the number to whatever is suitable for your cluster.
-- Since this takes a bit of time to run, we only will run the assembly for one metagenome. However,the code to run this on all three metagenomes is provided as well. If you want to assemble all three metagenomes on your own, you simply have to remove the hash from the command below.
-
+- We are only using four threads to run this job (via `-t 4`). For your own purposes increase the number to whatever is suitable for your cluster.
+- Since this takes a bit of time to run, and if you want to proceed faster, feel free to only run the assembly for one metagenome. However, if you plan on also running the binning tutorial after this tutorial its recommended to generate all 3 assemblies with Megahit.
 :::
 
 While this is running (it takes a bit), feel free to revisit your code or have a look at different information sites on:
@@ -578,10 +584,10 @@ mkdir 4_assemblies
 mkdir 4_assemblies/megahit
 
 #run megahit on all metagenomes (one sample)
-#megahit -1 3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/NIOZ114 --k-min 43 --k-max 127 --k-step 28
+megahit -1 3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/NIOZ114 --k-min 43 --k-max 127 --k-step 28
 
 #run megahit on all metagenomes (all samples)
-for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/$i; done
+#for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/$i; done
 
 #lets how the content of an assembly looks
 head 4_assemblies/megahit/NIOZ114/final.contigs.fa 
@@ -600,13 +606,51 @@ These files contain the following:
 - log = log info listing the info on what happened at each step. In here, the end is interesting as it tells us the basic contig stats and should look something like this: 4512 contigs, total 7371931 bp, min 202 bp, max 138579 bp, avg 1634 bp, N50 10836 bp
 
 
+**Exercise**
+
+1. Run Megahit also for the other two assembles, we will need all of this to proceed with the binning. 
+2. Check how many contigs were generated for each assembly
+
+To run this while you work through the rest of the tutorial, run the assembly for NIOZ118 and NIOZ130 in a screen or via slurm on the HPC. A short reminder on how to use screen:
+
+```{bash}
+#start a screen and give it a descriptive name:
+screen -S testrun
+
+#see what screens you have running with:
+screen -ls
+
+#restart an existing screen with:
+screen -r testrun
+
+#detach a screen (from outside a screen) with:
+screen -d
+ 
+#to completely close and remove the screen, type:
+exit
+```
+
+<details>
+    <summary>Click me to see an answer</summary>
+
+```{bash}
+#run just the assemblies for the two missing metagenomes
+#adjust the number of cpus used based on how busy the server is
+for i in `echo -e "NIOZ118\nNIOZ130"`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 4 -o 4_assemblies/megahit/$i; done
+
+#control how many contigs we get for each assembly
+grep -c ">" 4_assemblies/megahit/N*/final.contigs.fa 
+```
+
+</details>
+
 
 
 ## Run Metaspades
 
 
-:::{.callout-note}
-Spades is much more memory intensive compared to megahit, which is why for this tutorial we **WILL NOT** run it. However, feel free to test it afterwards.
+:::{.callout-warning}
+Metaspades is much more memory intensive compared to Megahit, which is why for this tutorial we **WILL NOT** run it. However, feel free to test it afterwards.
 :::
 
 [Metaspades](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5411777/) is another commonly used assembler that is a, for metagenomes, adjusted [spades assembler](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3342519/)
@@ -624,21 +668,26 @@ Here, we use fewer kmers compared to megahit due to the longer run-time. When ru
 mkdir 4_assemblies/metaspades
 
 #run spades on a single metagenome
-#spades.py --meta -t 20 -k 21,33,55,77 -1  3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz -o metaspades/NIOZ114
+#adjust the number of CPUs used accordingly
+#spades.py --meta -t 4 -k 21,33,55,77 -1  3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz -o metaspades/NIOZ114
 
 #run spades on all metagenomes
-for sample in `cat SampleList`; do spades.py --meta -t 30 -k 21,39,59,99,127 -1  3_trimmomatic/${sample}_R1_paired.fastq.gz -2 3_trimmomatic/${sample}_R2_paired.fastq.gz -o 4_assemblies/metaspades/${sample}; done
+for sample in `cat SampleList`; do spades.py --meta -t 4 -k 21,39,59,99,127 -1  3_trimmomatic/${sample}_R1_paired.fastq.gz -2 3_trimmomatic/${sample}_R2_paired.fastq.gz -o 4_assemblies/metaspades/${sample}; done
+
+#check content of a folder
+find  4_assemblies/metaspades/NIOZ114/ -maxdepth 1 -not -type d
 ```
 
 **Homework**
 
-Run metaspades, view the content of the generated files and check how many contigs we have.
+Run Metaspades on either one or all three assemblies, view the content of the generated files and check how many contigs we have. 
+
+
 
 
 ## Run quast to evaluate the assembly
 
-
-[Quast](https://github.com/ablab/quast) can be used to view assembly statistics of a single assembly but also compare individual assemblies. For now, we will just look at a single assembly, but on your own, do a comparison between spades and megahit. [Metaquast](http://quast.sourceforge.net/metaquast): MetaQUAST evaluates and compares metagenome assemblies based on alignments to close references. It is based on QUAST genome quality assessment tool, but addresses features specific for metagenome datasets.[Mikheenko et al., 2016](https://academic.oup.com/bioinformatics/article/32/7/1088/1743987)
+[Quast](https://github.com/ablab/quast) can be used to view assembly statistics of a single assembly but also compare individual assemblies. For now, we will just look at a single assembly, but on your own, do a comparison between spades and Megahit. [Metaquast](http://quast.sourceforge.net/metaquast): MetaQUAST evaluates and compares metagenome assemblies based on alignments to close references. It is based on QUAST genome quality assessment tool, but addresses features specific for metagenome datasets.[Mikheenko et al., 2016](https://academic.oup.com/bioinformatics/article/32/7/1088/1743987)
 
 Something that is good to know if you work with single genomes: Quast allows you to load reference genomes and align your assembly against this reference genome. That way, you can investigate your assembly for contamination and missassemblies. In our own experience this does not work too well with metagenomes at the moment, because not enough reference data can be loaded.
 
@@ -677,10 +726,10 @@ Often the N50 is viewed as a good store for a good assembly, since ideally a goo
 
 ```{bash}
 #run megahit
-for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 10 -o 4_assemblies/megahit/$i; done
+#for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 10 -o 4_assemblies/megahit/$i; done
 
 #run metaspades
-for sample in `cat SampleList`; do spades.py --meta -t 10 -k 21,39,59,99,127 -1  3_trimmomatic/${sample}_R1_paired.fastq.gz -2 3_trimmomatic/${sample}_R2_paired.fastq.gz -o 4_assemblies/metaspades/${sample}; done
+#for sample in `cat SampleList`; do spades.py --meta -t 10 -k 21,39,59,99,127 -1  3_trimmomatic/${sample}_R1_paired.fastq.gz -2 3_trimmomatic/${sample}_R2_paired.fastq.gz -o 4_assemblies/metaspades/${sample}; done
 
 #make folders
 mkdir 5_quast/
@@ -762,7 +811,7 @@ for i in `cat SampleList`; do awk '$6>=2500 {print $1,$5,$6}' 4_assemblies/megah
 #check what we did
 head 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt
 
-#check how many contigs we have now --> should be around 705
+#check how many contigs we have now --> should be around 705 instead of the 6000 contigs we had before
 #we can also see that almost 90% contigs were removed
 wc -l 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt
 
@@ -832,11 +881,13 @@ cat  4_assemblies/megahit/N*/N*_contigs_2500.fna >  4_assemblies/megahit/AllCont
 #combine length stats
 cat  4_assemblies/megahit/N*/N*_Contigs_2500.txt >  4_assemblies/megahit/AllContigs/All_contigs_2500_length_GC.txt
 
-wc -l 4_assemblies/megahit/AllContigs/*txt
+#check the output file
+wc -l 4_assemblies/megahit/AllContigs/All_contigs_2500_length_GC.txt
+head 4_assemblies/megahit/AllContigs/All_contigs_2500_length_GC.txt
 ```
 
-We have a total of 1245 contigs from our 3 metagenomes with a length above 2,500 bp.
-If we just worked with NIOZ114 we got 705 contigs, with a length above 2,500 bp.
+We have a total of 1245 contigs from our 3 metagenomes with a length greater than 2,500 bp.
+If we just worked with NIOZ114 we got 705 contigs with a length greater than 2,500 bp.
 
 
 
