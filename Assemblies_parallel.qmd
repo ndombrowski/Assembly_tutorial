@@ -67,14 +67,12 @@ The reason why we work with three and not only one metagenome is because another
 
 In this tutorial we will provide an example for how to run the code for a single metagenome or in a loop with all metagenomes of interest. The single example will be commented out (we added a ``#`` in front of it), if you want to try this remove the ``#`` and run the code.
 
-:::{.callout-warning}
-During this tutorial you will see examples that show how the output can look like. Sometimes these numbers can slightly differ to the output you might see. This is ok, as the assembler might just produce a slightly different output. As long as the results are in a similar range all is good.
-:::
-
-
 :::{.callout-note}
-Whenever we ask a question the code solution will be hidden.
+
+1. During this tutorial you will see examples that show how the output can look like. Sometimes these numbers can slightly differ to the output you might see. This is ok, as the assembler might just produce a slightly different output. As long as the results are in a similar range all is good.
+2. Whenever we ask a question the code solution will be hidden.
 You can show the code by pressing on \<Click me to see an answer\>.
+
 :::
 
 To fully understand this tutorial some good background in bash and AWK is needed. If you want to review your background we provide some intro tutorials for:
@@ -90,7 +88,7 @@ To fully understand this tutorial some good background in bash and AWK is needed
 
 You will see that during this workflow we will use a lot of for-loops. The reason is that this allows us to not run our 3 samples in three lines of code but just in one. 
 
-A general introduction into for-loops can be found [here](https://www.tutorialspoint.com/unix/for-loop.htm)
+A general introduction into for-loops can be found [here](https://www.tutorialspoint.com/unix/for-loop.htm).
 
 The general syntax is:
 
@@ -262,7 +260,7 @@ rm *gz
 - Make a new working directory, and name it `Assemblies`
 - go into that folder, this is your working directory
 - inside that folder, set a symbolic link to a folder with the metagenomic data, which is found here: `/export/lv3/scratch/bioinformatics_workshop/S10_Assembly/rawdata_1/`
-- set another symbolic link to a folder with secondary data we need from here: `/export/lv3/scratch/bioinformatics_workshop/S10_Assembly/adaptors`
+- set another symbolic link to a folder with secondary data we need from here: `/export/lv3/scratch/bioinformatics_workshop/S10_Assembly/adaptors/`
 
 <details>
     <summary>Click me to see an answer</summary>
@@ -273,6 +271,8 @@ user_name="ndombrowski"
 
 #prepare working directory
 cd /export/lv3/scratch/bioinformatics_workshop/Users/${user_name}
+
+#generate a folder to run the assembly workflow in
 mkdir Assemblies
 cd Assemblies
 
@@ -386,19 +386,25 @@ The output should look something like this and among others we see:
 
 - the general sequence statistics
 - the quality scores, across the sequence length. The phred score goes from 0-40 (good to bad) and we can see that the sequences generally are a bit worse at the beginning. This has something to do with the sequencing approach and is nothing to worry about. However, if you would see that the complete sequence is bad that is something to discuss for example with the sequencing center. 
-- The average sequence quality. If you have a bump at the beginning, that means we have more low quality sequences that we should to get rid of.
-- The duplication level. I.e. here most of our sequences are singletons. If you have 16S sequences that will look a bit different and we will have more duplicated sequences.
-- Overrepresented sequences Here, esp. if we have adapter sequences left, you will see a sequence information. This is important to note down, as we want to remove adapters in the cleaning step and its important to check if we used the right adapter information for the cleaning.
+
 
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly1.png){width=70% fig-align="center"}
+
+- The average sequence quality. If you have a bump at the beginning, that means we have more low quality sequences that we should to get rid of.
+
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly2.png){width=70% fig-align="center"}
+- The duplication level. I.e. here most of our sequences are singletons. If you have 16S sequences that will look a bit different and we will have more duplicated sequences.
+
+
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly3.png){width=70% fig-align="center"}
+- Overrepresented sequences Here, esp. if we have adapter sequences left, you will see a sequence information. This is important to note down, as we want to remove adapters in the cleaning step and its important to check if we used the right adapter information for the cleaning.
+
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly4.png){width=70% fig-align="center"}
 
 
 ### MultiQC to summarize the fastqc results
 
-[MultiQC](https://multiqc.info/docs/) is a reporting tool that parses summary statistics from results and log files generated by other bioinformatics tools. MultiQC doesn't run other tools for you - it's designed to be placed at the end of analysis pipelines or to be run manually when you've finished running your tools. [Ewels et al., 2016](https://academic.oup.com/bioinformatics/article/32/19/3047/2196507)
+[MultiQC](https://multiqc.info/docs/) is a reporting tool that parses summary statistics from results and log files generated by other bioinformatics tools. MultiQC doesn't run other tools for you - it's designed to be placed at the end of analysis pipelines or to be run manually when you've finished running your tools [(Ewels et al., 2016)](https://academic.oup.com/bioinformatics/article/32/19/3047/2196507).
 
 ```{bash}
 #make folder
@@ -434,7 +440,7 @@ Here we also get a zoom into the adapter content. If we hover over a line we see
 
 Next, we want to clean our sequences. For example, we want to remove adapters as well as low quality sequences. For this we can for example use Trimmomatic.  
 
-[Trimmomatic](http://www.usadellab.org/cms/uploads/supplementary/Trimmomatic/TrimmomaticManual_V0.32.pdf) : a flexible trimmer for Illumina sequence data. We want to filter our sequences and only retain them if they have a high enough quality. Additionally, we will remove Ns and for this we will use trimmomatic.[Bolger et al., 2014](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4103590/)
+[Trimmomatic](http://www.usadellab.org/cms/uploads/supplementary/Trimmomatic/TrimmomaticManual_V0.32.pdf) : is a flexible trimmer for Illumina sequence data. We will use this tool to filter our sequences and only retain them if they have a high enough quality. Additionally, we will remove Ns and for this we will use trimmomatic.[Bolger et al., 2014](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4103590/)
 
 While this is running (this might take a bit):
 
@@ -565,7 +571,7 @@ Other features:
 - In each kmer iteration potential errors in the graphs are cleaned
 
 :::{.callout-note}
-- **This takes a bit to run, so we only run the assembly for one metagenome**
+- **This takes a bit to run, so we only run the assembly for one metagenome. However, for the binnng all three assemblies need to be generated.**
 - **When you do this with your own data do not change the kmer sizes that Megahit uses by default!**
   We just reduce the numbers of kmers we use for this workflow in order to speed the process up (it should take only a few minutes). 
 - We are only using four threads to run this job (via `-t 4`). For your own purposes increase the number to whatever is suitable for your cluster.
@@ -587,7 +593,7 @@ mkdir 4_assemblies/megahit
 megahit -1 3_trimmomatic/NIOZ114_R1_paired.fastq.gz -2 3_trimmomatic/NIOZ114_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/NIOZ114 --k-min 43 --k-max 127 --k-step 28
 
 #run megahit on all metagenomes (all samples)
-#for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 2 -o 4_assemblies/megahit/$i; done
+#for i in `cat SampleList`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 20 -o 4_assemblies/megahit/$i; done
 
 #lets how the content of an assembly looks
 head 4_assemblies/megahit/NIOZ114/final.contigs.fa 
@@ -599,6 +605,7 @@ grep -c ">" 4_assemblies/megahit/N*/final.contigs.fa
 The files generated from Megahit should look like this:
 
 ![](C:/Users/ndmic/WorkingDir/Notebooks/Pictures/assembly8.png){width=80% fig-align="center"}
+
 These files contain the following:
 
 - final.contigs.fa = contains our assembly
@@ -608,8 +615,24 @@ These files contain the following:
 
 **Exercise**
 
-1. Run Megahit also for the other two assembles, we will need all of this to proceed with the binning. 
+1. Run Megahit also for the other two assembles, we will need all of this to proceed with the binning. Depending on how busy the server you might run this as homework after the session today.
 2. Check how many contigs were generated for each assembly
+
+<details>
+    <summary>Click me to see an answer</summary>
+
+```{bash}
+#run just the assemblies for the two missing metagenomes
+#adjust the number of cpus used based on how busy the server is
+for i in `echo -e "NIOZ118\nNIOZ130"`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 4 -o 4_assemblies/megahit/$i; done
+
+
+#control how many contigs we get for each assembly
+grep -c ">" 4_assemblies/megahit/N*/final.contigs.fa 
+```
+
+</details>
+
 
 To run this while you work through the rest of the tutorial, run the assembly for NIOZ118 and NIOZ130 in a screen or via slurm on the HPC. A short reminder on how to use screen:
 
@@ -629,20 +652,6 @@ screen -d
 #to completely close and remove the screen, type:
 exit
 ```
-
-<details>
-    <summary>Click me to see an answer</summary>
-
-```{bash}
-#run just the assemblies for the two missing metagenomes
-#adjust the number of cpus used based on how busy the server is
-for i in `echo -e "NIOZ118\nNIOZ130"`; do megahit -1 3_trimmomatic/${i}_R1_paired.fastq.gz -2 3_trimmomatic/${i}_R2_paired.fastq.gz  -t 4 -o 4_assemblies/megahit/$i; done
-
-#control how many contigs we get for each assembly
-grep -c ">" 4_assemblies/megahit/N*/final.contigs.fa 
-```
-
-</details>
 
 
 
@@ -675,7 +684,8 @@ mkdir 4_assemblies/metaspades
 for sample in `cat SampleList`; do spades.py --meta -t 4 -k 21,39,59,99,127 -1  3_trimmomatic/${sample}_R1_paired.fastq.gz -2 3_trimmomatic/${sample}_R2_paired.fastq.gz -o 4_assemblies/metaspades/${sample}; done
 
 #check content of a folder
-find  4_assemblies/metaspades/NIOZ114/ -maxdepth 1 -not -type d
+#we use find to simplify the output and not list the content of subfolders
+find 4_assemblies/metaspades/NIOZ114/ -maxdepth 1 -not -type d
 ```
 
 **Homework**
@@ -782,7 +792,7 @@ You will get some error messages here, if you do not have the assemblies for all
 :::
 
 ```{bash}
-#add in sample id into the file header for the assembly file to avoid bugs and easily identify where the contig originally came from
+#add the sample id into the file header for the assembly file to avoid bugs and easily identify where the contig originally came from
 parallel -j3 'i={}; sed "s/>/>${i}_/g" 4_assemblies/megahit/$i/final.contigs.fa | sed "s/k141_/sc/g" | sed "s/ /_1 /1" > 4_assemblies/megahit/${i}/${i}_temp' ::: `cat SampleList`
 
 #check what we did
@@ -794,26 +804,31 @@ parallel -j3 'i={};  grep ">" 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies
 #clean the header and remove everything after the space
 parallel -j3 'i={}; cut -f1 -d " " 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies/megahit/${i}/${i}_contigs.fna' ::: `cat SampleList`
 
-#check how the header looks now and how many contigs we have --> 6000 to 14 000 contigs
+#check how the header looks now
 head 4_assemblies/megahit/NIOZ114/NIOZ114_contigs.fna
+
+#check how many contigs we have --> 6000 to 14 000 contigs
 grep -c ">"  4_assemblies/megahit/NIOZ*/NIOZ*_contigs.fna
 
-#make list of length, GC for each contig
+#make a table with the length and GC for each contig
 parallel -j3 'i={}; perl scripts/length+GC.pl 4_assemblies/megahit/${i}/${i}_temp > 4_assemblies/megahit/${i}/${i}_length_gc.txt' ::: `cat SampleList`
 
-#check output file and number of contigs for one assembly: 6377 contigs
+#check output file
 head 4_assemblies/megahit/NIOZ114/NIOZ114_length_gc.txt
-wc -l 4_assemblies/megahit/NIOZ114/NIOZ114_length_gc.txt
 
-#make list for contigs above a certain length threshold (>2500 bp)
+#as a sanity check, count the number of contigs for each assembly  --> 6000 to 14 000 contigs
+wc -l 4_assemblies/megahit/N*/N*_length_gc.txt
+
+#make list for contigs above a certain length threshold (i.e. only keep contigs with >2500 bp)
 for i in `cat SampleList`; do awk '$6>=2500 {print $1,$5,$6}' 4_assemblies/megahit/${i}/${i}_length_gc.txt > 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt; done
 
-#check what we did
+#check how one of the output file looks like
 head 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt
 
-#check how many contigs we have now --> should be around 705 instead of the 6000 contigs we had before
+#check how many contigs we have now 
+#for NIOZ114 we should have around 705 instead of the initial 6000 contigs
 #we can also see that almost 90% contigs were removed
-wc -l 4_assemblies/megahit/NIOZ114/NIOZ114_Contigs_2500.txt
+wc -l 4_assemblies/megahit/N*/N*_Contigs_2500.txt
 
 #count nr of reads for >2500 and total length 
 for i in `cat SampleList`; do awk '{Length+=$3}END{print FILENAME,NR,Length}' 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt; done
@@ -839,7 +854,7 @@ The summary statistics for the number of contigs > 2500 bp and total sequence le
 Now lets remove the short contigs from our actual sequences:
 
 ```{bash}
-#for each assembly make a new file and only include contigs >2500bp
+#for each assembly make a new fna file that only includes contigs >2500bp
 for i in `cat SampleList`; do perl scripts/screen_list_new.pl <(cut -f1 -d " " 4_assemblies/megahit/${i}/${i}_Contigs_2500.txt) 4_assemblies/megahit/${i}/${i}_contigs.fna keep > 4_assemblies/megahit/${i}/${i}_contigs_2500.fna; done
 
 #control step
@@ -854,7 +869,7 @@ The files we get have so many contigs (this number needs to be consistent with t
 4_assemblies/megahit/NIOZ130/NIOZ130_contigs_2500.fna:422  
 ```
 
-Now we can clean things up to not store large or unnecessary files
+Now we can clean things up to not store large or unnecessary files:
 
 ```{bash}
 #rm temp files
@@ -865,7 +880,7 @@ for i in `cat SampleList`; do gzip 4_assemblies/megahit//${i}/final.contigs.fa; 
 for i in `cat SampleList`; do gzip 4_assemblies/megahit//${i}/*_info_megahit.txt; done
 
 #rm intermediate contig files, since they take up space
-rm 4_assemblies/megahit//*/intermediate_contigs/*fa
+rm -f 4_assemblies/megahit//*/intermediate_contigs/*fa
 ```
 
 
@@ -878,11 +893,16 @@ mkdir  4_assemblies/megahit/AllContigs
 #combine contigs (this can be useful if you would want to annotate the contigs, not the MAGs)
 cat  4_assemblies/megahit/N*/N*_contigs_2500.fna >  4_assemblies/megahit/AllContigs/All_contigs_2500.fna
 
-#combine length stats
+#count the total nr of contigs we have: 1245
+grep -c ">" 4_assemblies/megahit/AllContigs/All_contigs_2500.fna
+
+#combine length and GC statistics for each contig into one table
 cat  4_assemblies/megahit/N*/N*_Contigs_2500.txt >  4_assemblies/megahit/AllContigs/All_contigs_2500_length_GC.txt
 
-#check the output file
+#check the number of contigs in that table: 1245
 wc -l 4_assemblies/megahit/AllContigs/All_contigs_2500_length_GC.txt
+
+#check the contents of the summary file
 head 4_assemblies/megahit/AllContigs/All_contigs_2500_length_GC.txt
 ```
 
